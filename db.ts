@@ -13,15 +13,7 @@ db.exec(`
     )
 `);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    prompt_id INTEGER,
-    response TEXT,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(prompt_id) REFERENCES prompts(id)
-  );
-  
+db.exec(`  
   CREATE TABLE IF NOT EXISTS favorites (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     prompt_id INTEGER,
@@ -39,6 +31,13 @@ db.exec(`
     used_count INTEGER DEFAULT 0
   )
 `);
+
+db.exec(`CREATE TABLE IF NOT EXISTS history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  prompt TEXT NOT NULL,
+  response TEXT,
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)`);
 
 let base_prompts = [
 	{

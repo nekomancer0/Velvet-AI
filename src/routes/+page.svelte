@@ -31,14 +31,6 @@
 			// Handle notifications of new prompts from other users if needed
 			console.log('New prompt from another user:', data);
 		});
-
-		socket.on('prompt:suggestion', (data) => {
-			suggestedPrompts = [...suggestedPrompts, data];
-		});
-
-		for (let i = 0; i < 4; i++) {
-			requestPromptSuggestion();
-		}
 	});
 
 	onDestroy(() => {
@@ -64,14 +56,6 @@
 			error = 'Error sending prompt';
 		}
 	}
-
-	function requestPromptSuggestion() {
-		socket!.emit('prompt:generate-suggestion');
-	}
-
-	function usePrompt(suggestedPrompt: string) {
-		prompt = suggestedPrompt;
-	}
 </script>
 
 <div class="container">
@@ -85,18 +69,6 @@
 				Manage Lore and Prompts
 			</button>
 		</div>
-
-		{#if suggestedPrompts.length > 0}
-			<div class="suggestions">
-				<h3>AI Suggested Prompts:</h3>
-				{#each suggestedPrompts as suggestion}
-					<div class="suggestion">
-						<p>{suggestion.prompt}</p>
-						<button onclick={() => usePrompt(suggestion.prompt)}> Use this prompt </button>
-					</div>
-				{/each}
-			</div>
-		{/if}
 
 		{#if response}
 			<div class="response">{response}</div>

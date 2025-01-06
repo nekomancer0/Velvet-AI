@@ -78,15 +78,31 @@ Return only in JSON format.`;
 }
 
 async function generateLore(prompt: string): Promise<string> {
-	// First, let the AI determine the best parameters for this prompt
 	const options = await determineGenerationOptions(prompt);
 
 	try {
-		// Récupérer tous les prompts depuis la base de données
-		const prompts = db.prepare('SELECT content FROM prompts ORDER BY created_at').all();
+		// Get base prompts
+		const basePrompts = db.prepare('SELECT content FROM prompts ORDER BY created_at').all();
 
-		// Compiler les prompts en un seul texte
-		const basePrompt = prompts.map((p: any) => p.content).join('\n');
+		// Get recent history (last 5 interactions)
+		const history = db.prepare(`SELECT prompt, response FROM history`).all();
+
+		// Compile conversation history
+		let conversationHistory = basePrompts.map((p: any) => ({
+			role: 'system',
+			content: p.content
+		}));
+
+		// Add recent history to conversation
+		history.forEach((h: any) => {
+			conversationHistory.push(
+				{ role: 'user', content: h.prompt },
+				{ role: 'assistant', content: h.response }
+			);
+		});
+
+		// Add current prompt
+		conversationHistory.push({ role: 'user', content: prompt });
 
 		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
@@ -96,16 +112,21 @@ async function generateLore(prompt: string): Promise<string> {
 			},
 			body: JSON.stringify({
 				model: 'meta-llama/llama-3.1-8b-instruct',
-				messages: [
-					{ role: 'system', content: basePrompt },
-					{ role: 'user', content: prompt }
-				],
-				...options // Use the AI-determined options
+				messages: conversationHistory,
+				...options
 			})
 		});
 
 		const data = await response.json();
-		return data.choices[0].message.content;
+		const generatedResponse = data.choices[0].message.content;
+
+		db.prepare(
+			`INSERT INTO history (prompt, response) 
+            VALUES (?, ?)
+        `
+		).run(prompt, generatedResponse);
+
+		return generatedResponse;
 	} catch (error) {
 		console.error('Error:', error);
 		throw error;
@@ -221,42 +242,27 @@ app.post('/prompts/import', (req, res) => {
 	res.json({ message: 'Data imported successfully' });
 });
 
+app.get('/history', (req, res) => {
+	const history = db
+		.prepare(
+			`
+        SELECT 
+            h.id,
+            p.content as prompt,
+            h.response,
+            h.timestamp
+        FROM history h
+        JOIN prompts p ON h.prompt_id = p.id
+        ORDER BY h.timestamp DESC
+        LIMIT 50
+    `
+		)
+		.all();
+
+	res.status(200).json({ history });
+});
+
 app.set('port', process.env.PORT || 3000);
-
-async function generateSelfPrompt(): Promise<string> {
-	const selfPromptingPrompt = `As an Empyrean Felinid AI, generate an interesting question about Empyrean Felinid lore that would expand the existing knowledge base. The question should be thought-provoking and lead to detailed lore generation. Focus on topics like:
-- Celestial rituals
-- Divine culture
-- Magical practices
-- Historical events
-- Social structures
-- Mystical beliefs
-
-Return only the question itself, without any additional context or explanation.`;
-
-	try {
-		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${process.env.OPENROUTER_TOKEN}`
-			},
-			body: JSON.stringify({
-				model: 'meta-llama/llama-3.1-8b-instruct',
-				messages: [{ role: 'user', content: selfPromptingPrompt }],
-				max_tokens: 100,
-				temperature: 0.9,
-				top_p: 0.95
-			})
-		});
-
-		const data = await response.json();
-		return data.choices[0].message.content.trim();
-	} catch (error) {
-		console.error('Error generating self-prompt:', error);
-		throw error;
-	}
-}
 
 // Socket.IO event handlers
 io.on('connection', (socket) => {
@@ -282,30 +288,6 @@ io.on('connection', (socket) => {
 		} catch (error) {
 			socket.emit('prompt:error', {
 				error: error.message
-			});
-		}
-	});
-
-	socket.on('prompt:generate-suggestion', async () => {
-		try {
-			const suggestionQuestion = await generateSelfPrompt();
-
-			const suggestedPrompt = await generateLore(suggestionQuestion);
-
-			// Store the suggestion in the database
-			db.query(
-				`INSERT INTO prompt_suggestions (prompt, created_at, status) VALUES (?, datetime('now'), 'pending')`
-			).run(suggestedPrompt);
-
-			// Emit the suggestion to all connected clients
-			io.emit('prompt:suggestion', {
-				prompt: suggestedPrompt,
-				timestamp: new Date()
-			});
-		} catch (error) {
-			console.log(error);
-			socket.emit('prompt:error', {
-				error: 'Failed to generate prompt suggestion'
 			});
 		}
 	});
