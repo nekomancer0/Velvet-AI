@@ -22,7 +22,7 @@ Le projet **Empyrean Felinid AI** vise à créer une Intelligence Artificielle i
 
 ## Technologies utilisées
 
-- **OpenAI GPT-4** : Utilisé pour générer des réponses réalistes et cohérentes en fonction des prompts de l'utilisateur.
+- **meta-llama/llama-3.1-8b-instruct** : Utilisé pour générer des réponses réalistes et cohérentes en fonction des prompts de l'utilisateur.
 - **Dashboard personnalisé** : Interface web pour fournir des prompts et interagir avec l'IA.
-- **Langage Python** : Pour la gestion des requêtes à l'API, le traitement du texte et l'intégration avec le dashboard.
-- **Framework web (Flask/Django)** : Pour créer une interface de communication entre l'utilisateur et l'IA.
+- **Langage NodeJS & Bun** : Pour la gestion des requêtes à l'API, le traitement du texte et l'intégration avec le dashboard.
+- **Framework web (Svelte)** : Pour créer une interface de communication entre l'utilisateur et l'IA.
