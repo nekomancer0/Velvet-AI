@@ -88,7 +88,11 @@
 	<div class="classify">
 		<h3>Classement</h3>
 
-		<select onchange={async (ev) => await selectCategory(ev.target!.value)}>
+		<select
+			onchange={async (ev) =>
+				// @ts-ignore
+				await selectCategory(ev.target!.value)}
+		>
 			<option value="all" selected>All</option>
 			<option value="general">Général</option>
 			<option value="lore">Lore</option>

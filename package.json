@@ -10,8 +10,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
-		"lint": "prettier --check .",
-		"rebuild": "electron-rebuild -f -v 115 -m ./node_modules/better-sqlite3"
+		"lint": "prettier --check ."
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^3.0.0",
@@ -33,6 +32,8 @@
 		"axios": "^1.7.9",
 		"better-sqlite3": "^11.7.2",
 		"dotenv": "^16.4.7",
-		"express": "^4.21.2"
+		"express": "^4.21.2",
+		"socket.io": "^4.8.1",
+		"socket.io-client": "^4.8.1"
 	}
 }

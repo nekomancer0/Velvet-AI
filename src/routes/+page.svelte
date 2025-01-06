@@ -1,41 +1,102 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+	import { io } from 'socket.io-client';
 	import { goto } from '$app/navigation';
-	import axios from 'axios';
+	import type { Socket } from 'socket.io-client';
 
 	let prompt = '';
 	let response = '';
 	let error = '';
+	let socket: Socket | null = null;
+	let isConnected = false;
+	let suggestedPrompts: Array<{ prompt: string; timestamp: Date }> = [];
+
+	onMount(() => {
+		socket = io('http://localhost:3000');
+
+		socket.on('connect', () => {
+			isConnected = true;
+			console.log('Connected to server');
+		});
+
+		socket.on('prompt:response', (data) => {
+			response = data.response;
+		});
+
+		socket.on('prompt:error', (data) => {
+			error = data.error;
+		});
+
+		socket.on('prompt:new', (data) => {
+			// Handle notifications of new prompts from other users if needed
+			console.log('New prompt from another user:', data);
+		});
+
+		socket.on('prompt:suggestion', (data) => {
+			suggestedPrompts = [...suggestedPrompts, data];
+		});
+
+		for (let i = 0; i < 4; i++) {
+			requestPromptSuggestion();
+		}
+	});
+
+	onDestroy(() => {
+		if (socket) {
+			socket.disconnect();
+		}
+	});
 
 	async function sendPrompt() {
 		response = '';
 		error = '';
 
+		if (!isConnected) {
+			error = 'Not connected to server';
+			return;
+		}
+
 		try {
-			const res = await axios.post('http://localhost:3000/generate', { prompt });
-
-			if (res.data.error) {
-				error = res.data.error;
-				throw new Error(error);
-			}
-
-			response = res.data.response;
+			// Emit the prompt through socket instead of HTTP request
+			socket!.emit('prompt:send', { prompt });
 		} catch (e: any) {
 			console.error(e.message);
-			error = 'Erreur de connexion au serveur.';
+			error = 'Error sending prompt';
 		}
+	}
+
+	function requestPromptSuggestion() {
+		socket!.emit('prompt:generate-suggestion');
+	}
+
+	function usePrompt(suggestedPrompt: string) {
+		prompt = suggestedPrompt;
 	}
 </script>
 
 <div class="container">
 	<div class="question">
-		<textarea bind:value={prompt} placeholder="Entrez un prompt..."></textarea>
+		<textarea bind:value={prompt} placeholder="Enter a prompt..." class:disconnected={!isConnected}
+		></textarea>
 
 		<div class="buttons">
-			<button onclick={sendPrompt}>Générer</button>
-			<button class="manage" onclick={async () => await goto('/manage')}
-				>Gestion du lore et des prompts</button
-			>
+			<button onclick={sendPrompt} disabled={!isConnected}> Generate </button>
+			<button class="manage" onclick={async () => await goto('/manage')}>
+				Manage Lore and Prompts
+			</button>
 		</div>
+
+		{#if suggestedPrompts.length > 0}
+			<div class="suggestions">
+				<h3>AI Suggested Prompts:</h3>
+				{#each suggestedPrompts as suggestion}
+					<div class="suggestion">
+						<p>{suggestion.prompt}</p>
+						<button onclick={() => usePrompt(suggestion.prompt)}> Use this prompt </button>
+					</div>
+				{/each}
+			</div>
+		{/if}
 
 		{#if response}
 			<div class="response">{response}</div>
@@ -43,10 +104,19 @@
 		{#if error}
 			<div class="error">{error}</div>
 		{/if}
+
+		<!-- Connection status indicator -->
+		<div class="status" class:connected={isConnected}>
+			{isConnected ? 'Connected' : 'Disconnected'}
+		</div>
 	</div>
 </div>
 
 <style lang="scss">
+	* {
+		font-family: sans-serif;
+	}
+
 	div.question {
 		display: flex;
 		flex-direction: column;
@@ -113,5 +183,67 @@
 
 		align-items: center;
 		justify-content: center;
+	}
+
+	.status {
+		position: fixed;
+		bottom: 10px;
+		right: 10px;
+		padding: 5px 10px;
+		border-radius: 5px;
+		background: #ff4444;
+		color: white;
+		text-align: center;
+
+		&.connected {
+			background: #44ff44;
+		}
+	}
+
+	.disconnected {
+		opacity: 0.7;
+		cursor: not-allowed;
+		background: #ff4444;
+	}
+
+	.suggestions {
+		margin-top: 20px;
+		padding: 15px;
+		background: rgba(255, 255, 255, 0.1);
+		border-radius: 8px;
+
+		h3 {
+			margin: 0 0 15px 0;
+			color: #e0e0e0;
+		}
+	}
+
+	.suggestion {
+		padding: 10px;
+		margin-bottom: 10px;
+		background: rgba(0, 0, 0, 0.2);
+		border-radius: 5px;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+
+		p {
+			margin: 0;
+			flex: 1;
+		}
+
+		button {
+			margin-left: 10px;
+			padding: 5px 10px;
+			background: #4a4a4a;
+			border: none;
+			border-radius: 3px;
+			color: white;
+			cursor: pointer;
+
+			&:hover {
+				background: #5a5a5a;
+			}
+		}
 	}
 </style>

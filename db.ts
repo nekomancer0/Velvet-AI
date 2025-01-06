@@ -13,6 +13,33 @@ db.exec(`
     )
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prompt_id INTEGER,
+    response TEXT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(prompt_id) REFERENCES prompts(id)
+  );
+  
+  CREATE TABLE IF NOT EXISTS favorites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prompt_id INTEGER,
+    user_notes TEXT,
+    FOREIGN KEY(prompt_id) REFERENCES prompts(id)
+  );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS prompt_suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prompt TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    status TEXT DEFAULT 'pending',
+    used_count INTEGER DEFAULT 0
+  )
+`);
+
 let base_prompts = [
 	{
 		content:
