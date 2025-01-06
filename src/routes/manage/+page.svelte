@@ -1,9 +1,15 @@
 <script lang="ts">
 	import axios from 'axios';
 
-	// Page pour gérer le lore, en ajouter, en modifier et en supprimer et aussi les lister
+	let prompts: any[] = [];
+	let newPrompt = {
+		content: '',
+		category: 'general'
+	};
+	let error = '';
+	let success = '';
 
-	let prompts: any;
+	const categories = ['general', 'lore', 'avatar'];
 
 	let editingPrompt: any;
 
@@ -43,12 +49,42 @@
 	}
 
 	async function selectCategory(category: string) {
-		console.log(prompts);
-		console.log(category);
 		prompts = prompts.filter((prompt: any) => prompt.category === category);
 
+		if (prompts.length === 0) {
+			prompts = await getPrompts();
+		}
+
+		// If category is 'all', show all prompts
 		if (category === 'all') {
 			prompts = await getPrompts();
+		}
+	}
+
+	// Add new base prompt
+	async function addBasePrompt() {
+		try {
+			if (!newPrompt.content.trim()) {
+				error = 'Prompt content cannot be empty';
+				return;
+			}
+
+			await axios.post('http://localhost:3000/prompts', newPrompt);
+			success = 'Base prompt added successfully';
+			error = '';
+
+			// Reset form
+			newPrompt = {
+				content: '',
+				category: 'general'
+			};
+
+			// Reload prompts
+			prompts = await getPrompts();
+		} catch (err) {
+			error = 'Failed to add base prompt';
+			success = '';
+			console.error(err);
 		}
 	}
 </script>
@@ -56,6 +92,36 @@
 <h1>Gérer le lore</h1>
 
 <div class="container">
+	<div class="add-prompt-form">
+		<h3>Add New Base Prompt</h3>
+		<div class="form-group">
+			<label for="content">Prompt Content:</label>
+			<textarea
+				id="content"
+				bind:value={newPrompt.content}
+				placeholder="Enter the base prompt content..."
+				rows="4"
+			></textarea>
+		</div>
+
+		<div class="form-group">
+			<label for="category">Category:</label>
+			<select id="category" bind:value={newPrompt.category}>
+				{#each categories as category}
+					<option value={category}>{category}</option>
+				{/each}
+			</select>
+		</div>
+
+		<button onclick={addBasePrompt}>Add Base Prompt</button>
+
+		{#if error}
+			<div class="error">{error}</div>
+		{/if}
+		{#if success}
+			<div class="success">{success}</div>
+		{/if}
+	</div>
 	<div class="prompts">
 		{#key prompts}
 			{#if !prompts || prompts.length === 0}
@@ -93,12 +159,9 @@
 				// @ts-ignore
 				await selectCategory(ev.target!.value)}
 		>
-			<option value="all" selected>All</option>
-			<option value="general">Général</option>
-			<option value="lore">Lore</option>
-			<option value="ritual">Ritual</option>
-			<option value="adaptation">Adaptation</option>
-			<option value="myth">Myth</option>
+			{#each categories as category}
+				<option value={category}>{capitalize(category)}</option>
+			{/each}
 		</select>
 	</div>
 </div>
@@ -203,6 +266,55 @@
 						cursor: not-allowed;
 					}
 				}
+			}
+		}
+
+		.add-prompt-form {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+
+			input {
+				border: 1px solid #ccc;
+				border-radius: 5px;
+				padding: 10px;
+
+				width: 100%;
+				height: 100px;
+			}
+
+			select {
+				border: 1px solid #ccc;
+				border-radius: 5px;
+				padding: 10px;
+
+				width: 100%;
+			}
+
+			button {
+				width: 200px;
+				height: 30px;
+				background: #00b000;
+				color: #fff;
+				border: none;
+				border-radius: 5px;
+				cursor: pointer;
+			}
+
+			textarea {
+				width: 100%;
+				height: 100px;
+
+				border: 1px solid #ccc;
+				border-radius: 5px;
+			}
+
+			.error {
+				color: red;
+			}
+
+			.success {
+				color: green;
 			}
 		}
 	}
