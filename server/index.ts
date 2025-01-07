@@ -3,6 +3,8 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import db from './db';
 import dotenv from 'dotenv';
+import obs_mw from './obs';
+import { EventEmitter } from 'stream';
 dotenv.config();
 
 const app = express();
@@ -74,6 +76,42 @@ Return only in JSON format.`;
 			temperature: 0.8,
 			top_p: 0.9
 		};
+	}
+}
+
+async function determineLanguage(prompt: string): Promise<string> {
+	try {
+		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${process.env.OPENROUTER_TOKEN}`
+			},
+			body: JSON.stringify({
+				model: 'meta-llama/llama-3.1-8b-instruct',
+				messages: [
+					{
+						role: 'user',
+						content: `What is the language of the following prompt: "${prompt}". Return only fr-FR or en-US.`
+					}
+				],
+				max_tokens: 100, // Small response for efficiency
+				temperature: 0.3, // More deterministic for parameter selection
+				top_p: 0.9
+			})
+		});
+
+		const data = await response.json();
+		const optionsString = data.choices[0].message.content;
+
+		// Parse the JSON response
+
+		// Validate and clamp values to safe ranges
+		return optionsString;
+	} catch (error) {
+		console.error('Error determining options:', error);
+		// Return default options if something goes wrong
+		return '';
 	}
 }
 
@@ -278,6 +316,10 @@ io.on('connection', (socket) => {
 				response: response,
 				timestamp: new Date()
 			});
+
+			// send the response to the server itself
+
+			await obs_mw(response, await determineLanguage(response));
 
 			// Broadcast to other clients that a new response was generated
 			socket.broadcast.emit('prompt:new', {

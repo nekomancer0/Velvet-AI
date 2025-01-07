@@ -24,3 +24,5 @@ vite.config.ts.timestamp-*
 
 logs
 *.db
+*.mp3
+google_credentials.json
