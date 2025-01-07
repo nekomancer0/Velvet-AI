@@ -9,7 +9,6 @@
 	let error = '';
 	let socket: Socket | null = null;
 	let isConnected = false;
-	let suggestedPrompts: Array<{ prompt: string; timestamp: Date }> = [];
 
 	onMount(() => {
 		socket = io('http://localhost:3000');
@@ -57,6 +56,14 @@
 		}
 	}
 </script>
+
+<div class="header">
+	<h1>Meichja - Empyrean Felinid VTuber</h1>
+	<div class="buttons">
+		<button onclick={() => goto('/stream')}> Join Stream </button>
+		<button onclick={() => goto('/manage')}> Manage Lore </button>
+	</div>
+</div>
 
 <div class="container">
 	<div class="question">
@@ -216,6 +223,28 @@
 			&:hover {
 				background: #5a5a5a;
 			}
+		}
+	}
+
+	.header {
+		display: flex;
+		gap: 10px;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 70px;
+
+		h1 {
+			margin: 0;
+		}
+
+		button {
+			width: 200px;
+			height: 30px;
+			background: #00b000;
+			color: #fff;
+			border: none;
+			border-radius: 5px;
+			cursor: pointer;
 		}
 	}
 </style>

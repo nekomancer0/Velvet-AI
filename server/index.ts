@@ -292,6 +292,44 @@ io.on('connection', (socket) => {
 		}
 	});
 
+	socket.on('chat:message', async (data) => {
+		try {
+			// Add context based on current activity
+			const contextPrompt = `Current stream activity: ${data.activity}. 
+        A viewer says: ${data.message}
+        Respond as Meichja, keeping in character as a VTuber.`;
+
+			const response = await generateLore(contextPrompt);
+
+			socket.emit('chat:response', {
+				message: response
+			});
+		} catch (error) {
+			socket.emit('chat:error', {
+				error: error.message
+			});
+		}
+	});
+
+	socket.on('donation', async (data) => {
+		try {
+			const donationPrompt = `A viewer named ${data.username} has donated ${data.amount}! 
+        Their message is: "${data.message}"
+        React excitedly as Meichja and give them a special blessing!`;
+
+			const response = await generateLore(donationPrompt);
+
+			socket.emit('chat:response', {
+				message: response,
+				type: 'donation'
+			});
+		} catch (error) {
+			socket.emit('chat:error', {
+				error: error.message
+			});
+		}
+	});
+
 	socket.on('disconnect', () => {
 		console.log('Client disconnected');
 	});
