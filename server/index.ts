@@ -5,6 +5,7 @@ import db from './db';
 import dotenv from 'dotenv';
 import obs_mw from './obs';
 import { EventEmitter } from 'stream';
+import { rmSync } from 'fs';
 dotenv.config();
 
 const app = express();
@@ -57,7 +58,8 @@ Return only in JSON format.`;
 			.replace('```\n', '')
 			.replace('\n```', '')
 			.replace('```json\n', '')
-			.replace('\n```', '');
+			.replace('\n```', '')
+			.trim();
 
 		// Parse the JSON response
 		const options: GenerationOptions = JSON.parse(optionsString);
@@ -319,14 +321,14 @@ io.on('connection', (socket) => {
 
 			// send the response to the server itself
 
-			await obs_mw(response, await determineLanguage(response));
-
 			// Broadcast to other clients that a new response was generated
 			socket.broadcast.emit('prompt:new', {
 				prompt: promptData.prompt,
 				response: response,
 				timestamp: new Date()
 			});
+
+			await obs_mw(response, await determineLanguage(response));
 		} catch (error) {
 			socket.emit('prompt:error', {
 				error: error.message
@@ -346,6 +348,8 @@ io.on('connection', (socket) => {
 			socket.emit('chat:response', {
 				message: response
 			});
+
+			await obs_mw(response, await determineLanguage(response));
 		} catch (error) {
 			socket.emit('chat:error', {
 				error: error.message
