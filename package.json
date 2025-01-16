@@ -31,13 +31,17 @@
 		"vite": "^5.4.11"
 	},
 	"dependencies": {
+		"@google-cloud/speech": "^6.7.0",
 		"@google-cloud/text-to-speech": "^5.7.0",
+		"@types/tmi.js": "^1.8.6",
 		"axios": "^1.7.9",
 		"better-sqlite3": "^11.7.2",
+		"dayjs": "^1.11.13",
 		"dotenv": "^16.4.7",
 		"express": "^4.21.2",
 		"obs-websocket-js": "4",
 		"socket.io": "^4.8.1",
-		"socket.io-client": "^4.8.1"
+		"socket.io-client": "^4.8.1",
+		"tmi.js": "^1.8.5"
 	}
 }

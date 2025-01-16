@@ -12,14 +12,30 @@
 		socket = io('http://localhost:3000');
 
 		socket.on('chat:response', (data) => {
-			console.log(data);
-			messages = [
-				...messages,
-				{
-					type: 'ai',
-					content: data.message
-				}
-			];
+			if (data.type && data.type === 'twitch') {
+				let { response, username, message } = data;
+
+				messages = [
+					...messages,
+					{
+						type: 'twitch',
+						content: message,
+						username: username
+					},
+					{
+						type: 'ai',
+						content: response
+					}
+				];
+			} else {
+				messages = [
+					...messages,
+					{
+						type: 'ai',
+						content: data.message
+					}
+				];
+			}
 		});
 
 		socket.on('chat:error', (data) => {
@@ -34,7 +50,8 @@
 				...messages,
 				{
 					type: 'user',
-					content: userInput
+					content: userInput,
+					username: 'Developer'
 				}
 			];
 			userInput = '';
@@ -60,6 +77,9 @@
 	<div class="chat-window">
 		{#each messages as message}
 			<div class="message {message.type}">
+				{#if message.username}
+					<b>{message.username}</b><br />
+				{/if}
 				<p>{message.content}</p>
 			</div>
 		{/each}

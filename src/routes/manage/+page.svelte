@@ -9,7 +9,7 @@
 	let error = '';
 	let success = '';
 
-	const categories = ['general', 'lore', 'avatar'];
+	const categories = ['general', 'lore', 'avatar', 'interaction'];
 
 	let editingPrompt: any;
 
@@ -44,6 +44,23 @@
 
 	async function switchEditingPrompt(prompt: any) {
 		if (editingPrompt && editingPrompt.id === prompt.id) {
+			// Update prompt
+
+			try {
+				await axios.put(`http://localhost:3000/prompts/${prompt.id}`, {
+					content: editingPrompt.content,
+					category: editingPrompt.category,
+					tags: editingPrompt.tags
+				});
+				success = 'Prompt updated successfully';
+				error = '';
+				prompts = await getPrompts();
+			} catch (err) {
+				error = 'Failed to update prompt';
+				success = '';
+				console.error(err);
+			}
+
 			editingPrompt = null;
 		} else editingPrompt = prompt;
 	}

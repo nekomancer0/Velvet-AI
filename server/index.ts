@@ -4,8 +4,10 @@ import { Server } from 'socket.io';
 import db from './db';
 import dotenv from 'dotenv';
 import obs_mw from './obs';
-import { EventEmitter } from 'stream';
-import { rmSync } from 'fs';
+import { determineLanguage, generateLore } from './utils';
+import { initTwitchBot } from './twitch';
+import { deleteBrackets } from './utils/brackets';
+
 dotenv.config();
 
 const app = express();
@@ -17,161 +19,10 @@ const io = new Server(server, {
 	}
 });
 
-interface GenerationOptions {
-	max_tokens: number;
-	temperature: number;
-	top_p: number;
-}
+// clear history of the bot and interactions
 
-async function determineGenerationOptions(prompt: string): Promise<GenerationOptions> {
-	try {
-		const optionsPrompt = `As an AI assistant, analyze the following prompt and determine the best generation parameters for a response. The prompt is: "${prompt}". Consider these aspects:
-1. Is this a simple greeting, a lore question, or a complex query?
-2. How detailed should the response be?
-3. How creative vs factual should the response be?
-
-Return only a JSON object with these parameters:
-- max_tokens (number between 100-2000)
-- temperature (number between 0.1-1.0)
-- top_p (number between 0.1-1.0)
-
-Format: {"max_tokens": X, "temperature": Y, "top_p": Z};
-Return only in JSON format.`;
-
-		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${process.env.OPENROUTER_TOKEN}`
-			},
-			body: JSON.stringify({
-				model: 'meta-llama/llama-3.1-8b-instruct',
-				messages: [{ role: 'user', content: optionsPrompt }],
-				max_tokens: 100, // Small response for efficiency
-				temperature: 0.3, // More deterministic for parameter selection
-				top_p: 0.9
-			})
-		});
-
-		const data = await response.json();
-		const optionsString = data.choices[0].message.content
-			.replace('```\n', '')
-			.replace('\n```', '')
-			.replace('```json\n', '')
-			.replace('\n```', '')
-			.trim();
-
-		// Parse the JSON response
-		const options: GenerationOptions = JSON.parse(optionsString);
-
-		// Validate and clamp values to safe ranges
-		return {
-			max_tokens: Math.min(Math.max(100, options.max_tokens), 2000),
-			temperature: Math.min(Math.max(0.1, options.temperature), 1.0),
-			top_p: Math.min(Math.max(0.1, options.top_p), 1.0)
-		};
-	} catch (error) {
-		console.error('Error determining options:', error);
-		// Return default options if something goes wrong
-		return {
-			max_tokens: 500,
-			temperature: 0.8,
-			top_p: 0.9
-		};
-	}
-}
-
-async function determineLanguage(prompt: string): Promise<string> {
-	try {
-		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${process.env.OPENROUTER_TOKEN}`
-			},
-			body: JSON.stringify({
-				model: 'meta-llama/llama-3.1-8b-instruct',
-				messages: [
-					{
-						role: 'user',
-						content: `What is the language of the following prompt: "${prompt}". Return only fr-FR or en-US.`
-					}
-				],
-				max_tokens: 100, // Small response for efficiency
-				temperature: 0.3, // More deterministic for parameter selection
-				top_p: 0.9
-			})
-		});
-
-		const data = await response.json();
-		const optionsString = data.choices[0].message.content;
-
-		// Parse the JSON response
-
-		// Validate and clamp values to safe ranges
-		return optionsString;
-	} catch (error) {
-		console.error('Error determining options:', error);
-		// Return default options if something goes wrong
-		return '';
-	}
-}
-
-async function generateLore(prompt: string): Promise<string> {
-	const options = await determineGenerationOptions(prompt);
-
-	try {
-		// Get base prompts
-		const basePrompts = db.prepare('SELECT content FROM prompts ORDER BY created_at').all();
-
-		// Get recent history (last 5 interactions)
-		const history = db.prepare(`SELECT prompt, response FROM history`).all();
-
-		// Compile conversation history
-		let conversationHistory = basePrompts.map((p: any) => ({
-			role: 'system',
-			content: p.content
-		}));
-
-		// Add recent history to conversation
-		history.forEach((h: any) => {
-			conversationHistory.push(
-				{ role: 'user', content: h.prompt },
-				{ role: 'assistant', content: h.response }
-			);
-		});
-
-		// Add current prompt
-		conversationHistory.push({ role: 'user', content: prompt });
-
-		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${process.env.OPENROUTER_TOKEN}`
-			},
-			body: JSON.stringify({
-				model: 'meta-llama/llama-3.1-8b-instruct',
-				messages: conversationHistory,
-				...options
-			})
-		});
-
-		const data = await response.json();
-		const generatedResponse = data.choices[0].message.content;
-
-		db.prepare(
-			`INSERT INTO history (prompt, response) 
-            VALUES (?, ?)
-        `
-		).run(prompt, generatedResponse);
-
-		return generatedResponse;
-	} catch (error) {
-		console.error('Error:', error);
-		throw error;
-	}
-}
+db.exec('DELETE FROM history');
+db.exec('DELETE FROM sqlite_sequence WHERE name = "history"');
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -237,10 +88,10 @@ app.get('/prompts', (req, res) => {
 
 app.put('/prompts/:id', (req, res) => {
 	const { id } = req.params;
-	const { content, category, tags } = req.body;
+	const { content, category } = req.body;
 
-	const stmt = db.prepare('UPDATE prompts SET content = ?, category = ?, tags = ? WHERE id = ?');
-	const result = stmt.run(content, category, tags, id);
+	const stmt = db.prepare('UPDATE prompts SET content = ?, category = ? WHERE id = ?');
+	const result = stmt.run(content, category, id);
 
 	if (result.changes === 0) {
 		res.status(404).json({ error: 'Prompt not found' });
@@ -304,6 +155,7 @@ app.get('/history', (req, res) => {
 
 app.set('port', process.env.PORT || 3000);
 
+initTwitchBot(io);
 // Socket.IO event handlers
 io.on('connection', (socket) => {
 	console.log('Client connected');
@@ -328,7 +180,7 @@ io.on('connection', (socket) => {
 				timestamp: new Date()
 			});
 
-			await obs_mw(response, await determineLanguage(response));
+			await obs_mw(deleteBrackets(response), await determineLanguage(deleteBrackets(response)));
 		} catch (error) {
 			socket.emit('prompt:error', {
 				error: error.message
@@ -349,7 +201,7 @@ io.on('connection', (socket) => {
 				message: response
 			});
 
-			await obs_mw(response, await determineLanguage(response));
+			await obs_mw(deleteBrackets(response), await determineLanguage(deleteBrackets(response)));
 		} catch (error) {
 			socket.emit('chat:error', {
 				error: error.message

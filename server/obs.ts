@@ -1,9 +1,8 @@
 import { TextToSpeechClient } from '@google-cloud/text-to-speech';
 import dotenv from 'dotenv';
-import { writeFile, rm } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
+import liveTranscript from './utils/transcript';
 let tts = new TextToSpeechClient({ credentials: { ...require('../google_credentials.json') } });
 dotenv.config();
 
@@ -11,7 +10,8 @@ const __filename = fileURLToPath(import.meta.url); // get the resolved path to t
 const __dirname = path.dirname(__filename); // get the name of the directory
 
 import OBSWebSocket from 'obs-websocket-js';
-import { statSync, writeFileSync } from 'fs';
+import { readdirSync, rmSync, writeFileSync } from 'fs';
+import { deleteBrackets } from './utils/brackets';
 
 const obs = new OBSWebSocket();
 
@@ -20,37 +20,42 @@ obs.on('ConnectionOpened', () => {
 });
 
 (async () => {
-	await obs.connect({ address: 'localhost:4455' });
+	try {
+		await obs.connect({ address: 'localhost:4455' });
+	} catch (error) {
+		console.error('Error connecting to OBS:', error);
+	}
 })();
 
-export default function obs_mw(message: string, lang: string = 'fr-FR') {
+export default function obs_mw(message: string, lang: string = 'en-US') {
 	return new Promise(async (resolve, reject) => {
 		let outputFile = `${process.cwd()}/outputs/${Date.now()}.mp3`;
 
-		writeFileSync(outputFile, '');
-
 		let response = await tts.synthesizeSpeech({
 			input: {
-				text: message
+				text: deleteBrackets(message)
 			},
 			voice: {
-				languageCode: lang && lang !== '' ? lang : 'fr-FR',
-				ssmlGender: 'FEMALE'
+				languageCode: lang && lang !== '' ? lang : 'en-US',
+				ssmlGender: 'SSML_VOICE_GENDER_UNSPECIFIED'
 			},
 			audioConfig: {
-				audioEncoding: 'MP3',
+				audioEncoding: 'LINEAR16',
 				sampleRateHertz: 24000,
 				speakingRate: 1
 			}
 		});
 
-		writeFileSync(outputFile, response[0].audioContent as any, 'binary');
+		writeFileSync(outputFile, response[0].audioContent as any);
 
 		let res = await obs.send('GetSceneList');
 
+		let audioSource: any = null;
 		res.scenes.forEach(async (scene) => {
 			scene.sources.forEach(async (source) => {
 				if (source.type.endsWith('ffmpeg_source')) {
+					audioSource = source;
+
 					await obs.send('SetSourceSettings', {
 						sourceName: source.name,
 						sourceType: source.type,
@@ -68,11 +73,27 @@ export default function obs_mw(message: string, lang: string = 'fr-FR') {
 
 					obs.on('MediaEnded', async (data) => {
 						if (data.sourceName === source.name) {
-							writeFileSync(outputFile, '');
 							resolve(void 0);
+							obs.removeAllListeners('MediaEnded');
+
+							// Clean old audio files
+
+							let files = readdirSync(path.join(__dirname, '..', 'outputs'));
+
+							for (const file of files) {
+								if (file.endsWith('.mp3')) {
+									try {
+										rmSync(path.join(__dirname, '..', 'outputs', file));
+									} catch {
+										// Keep blank because the file is in use
+									}
+								}
+							}
 						}
 					});
 				}
+
+				// console.log('Source:', source.name, 'Type:', source.type);
 			});
 		});
 	});
