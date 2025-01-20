@@ -4,7 +4,7 @@ import obs_mw from './obs';
 import { determineLanguage, generateLore } from './utils';
 export async function initTwitchBot(io: Server) {
 	const client = new tmi.Client({
-		options: { debug: true, clientId: process.env.TWITCH_CLIENT_ID! },
+		options: { debug: false, clientId: process.env.TWITCH_CLIENT_ID! },
 		connection: {
 			reconnect: true,
 			secure: true

@@ -3,10 +3,17 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import db from './db';
 import dotenv from 'dotenv';
-import obs_mw from './obs';
-import { determineLanguage, generateLore } from './utils';
+import { generateLore } from './utils';
 import { initTwitchBot } from './twitch';
 import { deleteBrackets } from './utils/brackets';
+import playAudio from './playaudio';
+import { isOBSRunning } from './obs';
+import { confirm, input } from '@inquirer/prompts';
+import record from './utils/record';
+import liveTranscript from './utils/transcript';
+import e from 'express';
+import path from 'path';
+import { writeFileSync } from 'fs';
 
 dotenv.config();
 
@@ -180,7 +187,7 @@ io.on('connection', (socket) => {
 				timestamp: new Date()
 			});
 
-			await obs_mw(deleteBrackets(response), await determineLanguage(deleteBrackets(response)));
+			await playAudio({ obs: isOBSRunning(), message: deleteBrackets(response), lang: 'en-US' });
 		} catch (error) {
 			socket.emit('prompt:error', {
 				error: error.message
@@ -201,7 +208,7 @@ io.on('connection', (socket) => {
 				message: response
 			});
 
-			await obs_mw(deleteBrackets(response), await determineLanguage(deleteBrackets(response)));
+			await playAudio({ obs: isOBSRunning(), message: deleteBrackets(response), lang: 'en-US' });
 		} catch (error) {
 			socket.emit('chat:error', {
 				error: error.message
@@ -233,9 +240,60 @@ io.on('connection', (socket) => {
 	});
 });
 
-server.listen(app.get('port'), () => {
+server.listen(app.get('port'), async () => {
 	console.log(
 		`Serveur en écoute sur le port: ${app.get('port')} \nhttp://localhost:${app.get('port')}`
 	);
 	console.log("Accès à l'API OpenRouter configuré");
+
+	let response = await confirm({ message: 'OBS is not connected, do you want to talk here?' });
+
+	if (response) {
+		let vocalOrText = await confirm({ message: 'Do you want to use voice?', default: true });
+
+		if (vocalOrText) {
+			async function send() {
+				record((data) => {
+					let filepath = path.join(__dirname, '..', 'outputs', `${Date.now()}.mp3`);
+
+					writeFileSync(filepath, data);
+
+					liveTranscript(filepath, async (msg) => {
+						if (msg === '') {
+							console.log('No message detected');
+							send();
+							return;
+						}
+
+						console.log(msg, 'aa');
+
+						let res = await generateLore(msg);
+						await playAudio(
+							{ obs: isOBSRunning(), message: deleteBrackets(res), lang: 'en-US' },
+							() => {
+								send();
+							}
+						);
+					});
+				});
+			}
+
+			await send();
+		} else {
+			async function send() {
+				let msg = await input({ message: 'Enter your message.', required: true });
+
+				let res = await generateLore(msg);
+
+				await playAudio(
+					{ obs: isOBSRunning(), message: deleteBrackets(res), lang: 'en-US' },
+					() => {
+						send();
+					}
+				);
+			}
+
+			await send();
+		}
+	}
 });

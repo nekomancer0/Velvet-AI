@@ -2,7 +2,6 @@ import { TextToSpeechClient } from '@google-cloud/text-to-speech';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import liveTranscript from './utils/transcript';
 let tts = new TextToSpeechClient({ credentials: { ...require('../google_credentials.json') } });
 dotenv.config();
 
@@ -15,6 +14,8 @@ import { deleteBrackets } from './utils/brackets';
 
 const obs = new OBSWebSocket();
 
+let running = false;
+
 obs.on('ConnectionOpened', () => {
 	console.log('Connected to OBS WebSocket');
 });
@@ -22,8 +23,11 @@ obs.on('ConnectionOpened', () => {
 (async () => {
 	try {
 		await obs.connect({ address: 'localhost:4455' });
+		running = true;
 	} catch (error) {
 		console.error('Error connecting to OBS:', error);
+		console.log('Will be using portaudio instead.');
+		running = false;
 	}
 })();
 
@@ -92,9 +96,11 @@ export default function obs_mw(message: string, lang: string = 'en-US') {
 						}
 					});
 				}
-
-				// console.log('Source:', source.name, 'Type:', source.type);
 			});
 		});
 	});
+}
+
+export function isOBSRunning() {
+	return running;
 }
